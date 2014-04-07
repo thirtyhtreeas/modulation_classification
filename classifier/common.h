@@ -1,3 +1,5 @@
+#ifndef COMMON_H
+#define COMMON_H
 #include <volk/volk.h>
 #include <fftw3.h>
 #include "gri_fft.h"
@@ -20,3 +22,15 @@
 #include <algorithm>    // std::random_shuffle
 #include <stdlib.h>  //rand()
 #include <time.h> //time
+
+typedef std::complex<double> com_dbl_t;
+typedef std::vector<com_dbl_t> vec_com_dbl_t;
+
+typedef std::complex<float> com_flt_t;
+typedef std::vector<com_flt_t> vec_com_flt_t;
+typedef std::vector<float> vec_flt_t;
+
+typedef std::vector<int> vec_int_t;
+
+
+#endif //COMMON_H

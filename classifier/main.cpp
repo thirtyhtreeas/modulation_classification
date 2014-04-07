@@ -1,3 +1,4 @@
+#include "common.h"
 #include <uhd/utils/safe_main.hpp>
 #include <uhd/exception.hpp>
 #include <boost/program_options.hpp>
@@ -6,11 +7,25 @@
 #include <sstream>
 #include <string>
 #include <unistd.h>
+#include <boost/accumulators/accumulators.hpp>
+#include <boost/accumulators/statistics/stats.hpp>
+#include <boost/accumulators/statistics/mean.hpp>
+#include <boost/accumulators/statistics/moment.hpp>
 namespace po = boost::program_options;
+namespace bacc=boost::accumulators;
 bool stop_signal_called = false;
 bool useServer = true;
 void sig_int_handler(int) {
     stop_signal_called = true;
+}
+
+size_t usrp_receive(uhd::rx_streamer::sptr rx_stream, vec_com_flt_t *buff) //gets raw data from a source
+{
+    uhd::rx_metadata_t md;
+	size_t num_rx_samps=0;
+    //listening to the uhd usrps
+	num_rx_samps = rx_stream->recv(&(buff->front()), buff->size(), md);
+	return num_rx_samps;
 }
 
 int UHD_SAFE_MAIN(int argc, char *argv[]) {
@@ -65,14 +80,13 @@ int UHD_SAFE_MAIN(int argc, char *argv[]) {
     if (vm.count("subdev")) usrp->set_rx_subdev_spec(subdev);
 
     std::cout << boost::format("RX using Device: %s") % usrp->get_pp_string() ;
-    std::cout << boost::format("FB using Device: %s") % fbusrp->get_pp_string()  << std::endl;
 
-    //set RX and FB sample rate
+    //set RX sample rate
     std::cout << boost::format("Setting RX Rate: %f Msps...") % (rate/1e6) << std::endl;
     usrp->set_rx_rate(rate);
     std::cout << boost::format("Actual RX Rate: %f Msps...") % (usrp->get_rx_rate()/1e6) << std::endl;
 
-    //set RX and FB center frequency
+    //set RX center frequency
     std::cout << boost::format("Setting RX Freq: %f MHz...") % (freq/1e6) << std::endl;
     usrp->set_rx_freq(freq);
     std::cout << boost::format("Actual RX Freq: %f MHz...") % (usrp->get_rx_freq()/1e6) << std::endl;
@@ -112,7 +126,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]) {
         UHD_ASSERT_THROW(ref_locked.to_bool());
     }
 
-    //setup RX and FB streaming
+    //setup RX streaming
     uhd::stream_cmd_t stream_cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
     stream_cmd.num_samps = 0;
     stream_cmd.stream_now = true;
@@ -128,10 +142,21 @@ int UHD_SAFE_MAIN(int argc, char *argv[]) {
     std::signal(SIGKILL, &sig_int_handler);
     std::signal(SIGTERM, &sig_int_handler);
 
+    vec_com_flt_t *rx_buff = new vec_com_flt_t(1440,0);
+
+    bacc::accumulator_set< float,
+                            bacc::stats< bacc::tag::mean >
+                          > acc;
+
     while(not stop_signal_called)
     {
         //main loop
-        sleep(1);
+        usrp_receive(rx_stream, rx_buff);
+        for(size_t i=0; i<rx_buff->size(); ++i){
+            acc(std::abs(rx_buff->at(i)));
+        }
+        std::cout << "Mean::  " << boost::accumulators::mean(acc) << std::endl;
+        
     }
 
     //finished, stop radio
