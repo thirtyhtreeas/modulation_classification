@@ -11,6 +11,7 @@
 #include <boost/accumulators/statistics/stats.hpp>
 #include <boost/accumulators/statistics/mean.hpp>
 #include <boost/accumulators/statistics/moment.hpp>
+#include <boost/accumulators/statistics/kurtosis.hpp>
 namespace po = boost::program_options;
 namespace bacc=boost::accumulators;
 bool stop_signal_called = false;
@@ -26,6 +27,13 @@ size_t usrp_receive(uhd::rx_streamer::sptr rx_stream, vec_com_flt_t *buff) //get
     //listening to the uhd usrps
 	num_rx_samps = rx_stream->recv(&(buff->front()), buff->size(), md);
 	return num_rx_samps;
+}
+
+float envelope(com_flt_t sample)
+{
+    //Envelop: sqrt(abs(I*I+Q*Q))    
+    return std::sqrt(std::abs((std::real(sample)*std::real(sample))+
+                              (std::imag(sample)*std::imag(sample))));
 }
 
 int UHD_SAFE_MAIN(int argc, char *argv[]) {
@@ -145,7 +153,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]) {
     vec_com_flt_t *rx_buff = new vec_com_flt_t(1440,0);
 
     bacc::accumulator_set< float,
-                            bacc::stats< bacc::tag::mean >
+                            bacc::stats< bacc::tag::kurtosis >
                           > acc;
 
     while(not stop_signal_called)
@@ -153,9 +161,11 @@ int UHD_SAFE_MAIN(int argc, char *argv[]) {
         //main loop
         usrp_receive(rx_stream, rx_buff);
         for(size_t i=0; i<rx_buff->size(); ++i){
-            acc(std::abs(rx_buff->at(i)));
+            //std::cout << "Sample: " << rx_buff->at(i) << std::endl;
+            //acc(envelope(rx_buff->at(i)));
+            acc(0);
         }
-        std::cout << "Mean::  " << boost::accumulators::mean(acc) << std::endl;
+        std::cout << "Kurtosis::  " << boost::accumulators::kurtosis(acc) << std::endl;
         
     }
 
